@@ -1,0 +1,124 @@
+# ระบบชำระเงินด้วย QR Code สำหรับการจ่ายน้ำมัน
+
+## เป้าหมาย (Goals)
+- สร้างระบบจ่ายน้ำมันที่มีการชำระเงินผ่าน QR Code
+- ฟีเจอร์: กำหนดจำนวนเงิน → Generate QR Code → ตรวจสอบสถานะการชำระเงิน → อนุญาตการจ่ายน้ำมัน
+
+## เครื่องมือ (Tools)
+- **Frontend**: React + TailwindCSS + GSAP (สำหรับ UI ที่ interactive และ responsive)
+- **Backend**: Node.js + Express
+- **Database**: MongoDB หรือ Firebase (สำหรับจัดการข้อมูลการชำระเงินและสถานะ)
+- **Payment Gateway**: API ของ PromptPay หรือ GB PrimePay
+
+## Workflow (กระบวนการทำงาน)
+1. **กำหนดจำนวนเงิน**
+   - ลูกค้าป้อนจำนวนเงินที่ต้องการจ่ายผ่าน UI
+2. **Generate QR Code**
+   - ระบบสร้าง QR Code ที่ลิงก์ไปยัง Payment Gateway พร้อมข้อมูลการชำระเงิน
+3. **สแกน QR Code**
+   - ลูกค้าสแกน QR Code ด้วยแอปธนาคาร
+4. **ตรวจสอบสถานะ**
+   - ตรวจสอบสถานะการชำระเงินโดยใช้ API ของ Payment Gateway
+5. **อนุญาตจ่ายน้ำมัน**
+   - หากชำระเงินสำเร็จ ระบบจะอนุญาตให้จ่ายน้ำมัน
+
+## ความต้องการด้านดีไซน์ (Design Requirements)
+- ใช้ TailwindCSS สำหรับการจัดวาง UI
+- มีการแอนิเมชันด้วย GSAP เช่น QR Code ที่ขยายและหมุนเมื่อสร้างเสร็จ
+- UI ต้อง responsive และใช้งานง่าย
+
+## API Integration
+- **Endpoint สำหรับ Generate QR Code**: `/api/generate-qr`
+   - Method: POST
+   - Body: `{ amount: number }`
+   - Response: `{ qrCodeUrl: string }`
+- **Endpoint สำหรับตรวจสอบสถานะ**: `/api/check-payment`
+   - Method: GET
+   - Params: `transactionId`
+   - Response: `{ status: 'success' | 'pending' | 'failed' }`
+
+## ตัวอย่างโค้ด (Code Example)
+### Frontend: React + GSAP + TailwindCSS
+```typescript name=QRCodePayment.tsx
+import React, { useState } from 'react';
+import { gsap } from 'gsap';
+import axios from 'axios';
+
+const QRCodePayment: React.FC = () => {
+  const [amount, setAmount] = useState<number>(0);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<string>('pending');
+
+  const generateQRCode = async () => {
+    try {
+      const { data } = await axios.post('/api/generate-qr', { amount });
+      setQrCodeUrl(data.qrCodeUrl);
+
+      // GSAP Animation
+      gsap.fromTo('#qr-code', { scale: 0, rotate: 0 }, { scale: 1, rotate: 360, duration: 1 });
+    } catch (err) {
+      console.error('Error generating QR Code:', err);
+    }
+  };
+
+  const checkPaymentStatus = async () => {
+    try {
+      const { data } = await axios.get(`/api/check-payment?transactionId=${amount}`);
+      setPaymentStatus(data.status);
+    } catch (err) {
+      console.error('Error checking payment status:', err);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-lg mx-auto">
+      <h1 className="text-2xl font-bold mb-4">ระบบชำระเงินน้ำมัน</h1>
+      <input
+        type="number"
+        placeholder="กำหนดจำนวนเงิน"
+        className="border p-2 w-full mb-4"
+        value={amount}
+        onChange={(e) => setAmount(Number(e.target.value))}
+      />
+      <button
+        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full mb-4"
+        onClick={generateQRCode}
+      >
+        สร้าง QR Code
+      </button>
+
+      {qrCodeUrl && (
+        <div id="qr-code" className="flex justify-center my-4">
+          <img src={qrCodeUrl} alt="QR Code" className="shadow-md" />
+        </div>
+      )}
+
+      <button
+        className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full"
+        onClick={checkPaymentStatus}
+      >
+        ตรวจสอบสถานะการชำระเงิน
+      </button>
+
+      <p className="text-lg mt-4">
+        สถานะการชำระเงิน: <span className="font-semibold">{paymentStatus}</span>
+      </p>
+    </div>
+  );
+};
+
+export default QRCodePayment;
+```
+
+## คำอธิบาย
+- UI ใช้ TailwindCSS เพื่อความสวยงามและ responsive
+- GSAP ใช้สร้างแอนิเมชันเมื่อ QR Code ถูกสร้าง
+- Axios ใช้สำหรับเรียก API เพื่อ generate QR Code และตรวจสอบสถานะ
+
+## เทคนิคเสริม
+1. **ปรับปรุง UI**: เพิ่ม progress bar หรือ loader ระหว่างการตรวจสอบสถานะการชำระเงิน
+2. **ความปลอดภัย**: ใช้ HTTPS และ JWT เพื่อป้องกันข้อมูล API
+3. **ปรับปรุงการทำงาน**: ใช้ WebSocket แทน polling ในการตรวจสอบสถานะการชำระเงินแบบ real-time
+4. **เพิ่มฟีเจอร์**: แจ้งเตือนผ่าน SMS หรือ Email เมื่อชำระเงินสำเร็จ
+
+พร้อมช่วยปรับปรุงโค้ดหรือเพิ่มฟีเจอร์เพิ่มเติมได้ครับ! 🎉
