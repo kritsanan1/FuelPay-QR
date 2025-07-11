@@ -14,7 +14,6 @@ interface TransactionHistoryProps {
 export default function TransactionHistory({ isOpen, onClose }: TransactionHistoryProps) {
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['/api/transactions'],
-    queryParams: { limit: 20 },
     enabled: isOpen
   });
 

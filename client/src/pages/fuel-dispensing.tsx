@@ -50,19 +50,31 @@ export default function FuelDispensingPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/fuel-types'] });
       queryClient.invalidateQueries({ queryKey: ['/api/pumps'] });
+    },
+    onError: (error) => {
+      console.error('Initialization error:', error);
+      toast({
+        title: "ไม่สามารถเริ่มระบบได้",
+        description: "กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive"
+      });
     }
   });
 
   // Fetch fuel types
-  const { data: fuelTypes = [], isLoading: loadingFuelTypes } = useQuery({
+  const { data: fuelTypes = [], isLoading: loadingFuelTypes, error: fuelTypesError } = useQuery({
     queryKey: ['/api/fuel-types'],
-    enabled: true
+    enabled: true,
+    retry: 3,
+    retryDelay: 1000
   });
 
   // Fetch pumps
-  const { data: pumps = [], isLoading: loadingPumps } = useQuery({
+  const { data: pumps = [], isLoading: loadingPumps, error: pumpsError } = useQuery({
     queryKey: ['/api/pumps'],
-    enabled: true
+    enabled: true,
+    retry: 3,
+    retryDelay: 1000
   });
 
   // Initialize system on mount
@@ -81,9 +93,10 @@ export default function FuelDispensingPage() {
   // Handle WebSocket messages
   useEffect(() => {
     if (lastMessage) {
-      const message = JSON.parse(lastMessage);
-      
-      switch (message.type) {
+      try {
+        const message = JSON.parse(lastMessage);
+        
+        switch (message.type) {
         case 'payment_status_updated':
           if (currentTransaction?.transactionId === message.transactionId) {
             setCurrentTransaction(prev => ({
@@ -124,6 +137,9 @@ export default function FuelDispensingPage() {
             });
           }
           break;
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
       }
     }
   }, [lastMessage, currentTransaction, toast]);
