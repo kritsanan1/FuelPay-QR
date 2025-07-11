@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -98,6 +98,10 @@ export default function DispensingModal({ isOpen, onClose, transaction }: Dispen
         className="max-w-lg p-0 bg-black/75 border-none"
         hideCloseButton
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>การจ่ายน้ำมัน</DialogTitle>
+          <DialogDescription>แสดงสถานะการจ่ายน้ำมันแบบเรียลไทม์</DialogDescription>
+        </DialogHeader>
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
