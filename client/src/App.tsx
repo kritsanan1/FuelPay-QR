@@ -4,13 +4,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import FuelDispensingPage from "@/pages/fuel-dispensing";
+import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
+import Navigation from "@/components/navigation";
 import { useEffect } from "react";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={FuelDispensingPage} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -41,6 +44,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <Navigation />
         <Toaster />
         <Router />
       </TooltipProvider>

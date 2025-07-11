@@ -2,6 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import Stripe from "stripe";
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-06-30.basil",
+});
 import { insertTransactionSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -333,6 +342,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get transaction error:', error);
       res.status(500).json({ message: "Failed to fetch transaction", error: String(error) });
+    }
+  });
+
+  // Stripe payment endpoints
+  app.post('/api/stripe/create-payment-intent', async (req, res) => {
+    try {
+      const { amount, currency = 'thb', transactionId } = req.body;
+      
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to satang for THB
+        currency,
+        metadata: {
+          transactionId,
+        },
+      });
+
+      // Update transaction with Stripe payment intent ID
+      const transaction = await storage.getTransactionByTransactionId(transactionId);
+      if (transaction) {
+        await storage.updateTransactionStripePaymentIntent(transaction.id, paymentIntent.id);
+        await storage.updateTransactionPaymentStatus(transaction.id, "processing");
+      }
+
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id
+      });
+    } catch (error: any) {
+      console.error('Stripe payment intent error:', error);
+      res.status(500).json({ message: "Error creating payment intent: " + error.message });
+    }
+  });
+
+  app.post('/api/stripe/confirm-payment', async (req, res) => {
+    try {
+      const { paymentIntentId } = req.body;
+      
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      
+      if (paymentIntent.status === 'succeeded') {
+        // Find transaction by payment intent ID and update status
+        const transactions = await storage.getRecentTransactions(100);
+        const transaction = transactions.find(t => t.stripePaymentIntentId === paymentIntentId);
+        
+        if (transaction) {
+          await storage.updateTransactionPaymentStatus(transaction.id, "success");
+          
+          broadcastToClients({
+            type: 'payment_status_updated',
+            transactionId: transaction.transactionId,
+            paymentStatus: 'success'
+          });
+        }
+      }
+
+      res.json({ 
+        status: paymentIntent.status,
+        transactionId: paymentIntent.metadata.transactionId 
+      });
+    } catch (error: any) {
+      console.error('Stripe confirm payment error:', error);
+      res.status(500).json({ message: "Error confirming payment: " + error.message });
+    }
+  });
+
+  // Admin Dashboard Routes
+  app.get('/api/admin/stats', async (req, res) => {
+    try {
+      const stats = await storage.getTransactionStats();
+      const totalUsers = (await storage.getAllUsers()).length;
+      const pumps = await storage.getPumps();
+      const activePumps = pumps.filter(p => p.isActive && p.isOnline).length;
+
+      res.json({
+        ...stats,
+        totalUsers,
+        totalPumps: pumps.length,
+        activePumps,
+      });
+    } catch (error: any) {
+      console.error('Admin stats error:', error);
+      res.status(500).json({ message: "Error fetching admin stats: " + error.message });
+    }
+  });
+
+  app.get('/api/admin/users', async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      // Remove passwords from response
+      const safeUsers = users.map(user => {
+        const { password, ...safeUser } = user;
+        return safeUser;
+      });
+      res.json(safeUsers);
+    } catch (error: any) {
+      console.error('Admin users error:', error);
+      res.status(500).json({ message: "Error fetching users: " + error.message });
+    }
+  });
+
+  app.get('/api/admin/audit-logs', async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const logs = await storage.getAuditLogs(limit, offset);
+      res.json(logs);
+    } catch (error: any) {
+      console.error('Admin audit logs error:', error);
+      res.status(500).json({ message: "Error fetching audit logs: " + error.message });
+    }
+  });
+
+  app.get('/api/admin/maintenance', async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const records = await storage.getMaintenanceRecords(limit);
+      res.json(records);
+    } catch (error: any) {
+      console.error('Admin maintenance error:', error);
+      res.status(500).json({ message: "Error fetching maintenance records: " + error.message });
+    }
+  });
+
+  app.post('/api/admin/maintenance', async (req, res) => {
+    try {
+      const { pumpId, description, performedBy, scheduledDate, notes } = req.body;
+      
+      const record = await storage.createMaintenanceRecord({
+        pumpId,
+        description,
+        performedBy,
+        scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+        notes,
+      });
+
+      // Create audit log
+      await storage.createAuditLog({
+        userId: performedBy,
+        action: "create",
+        tableName: "maintenance_records",
+        recordId: record.id.toString(),
+        newValues: JSON.stringify(record),
+      });
+
+      res.json(record);
+    } catch (error: any) {
+      console.error('Create maintenance error:', error);
+      res.status(500).json({ message: "Error creating maintenance record: " + error.message });
+    }
+  });
+
+  app.put('/api/admin/pumps/:id/status', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isActive, isOnline } = req.body;
+      
+      const pump = await storage.updatePumpStatus(parseInt(id), isActive, isOnline);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId: 1, // System user for now
+        action: "update",
+        tableName: "pumps",
+        recordId: id,
+        newValues: JSON.stringify({ isActive, isOnline }),
+      });
+
+      res.json(pump);
+    } catch (error: any) {
+      console.error('Update pump status error:', error);
+      res.status(500).json({ message: "Error updating pump status: " + error.message });
+    }
+  });
+
+  app.put('/api/admin/fuel-types/:id/price', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { pricePerLiter } = req.body;
+      
+      const fuelType = await storage.updateFuelTypePrice(parseInt(id), pricePerLiter);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId: 1, // System user for now
+        action: "update",
+        tableName: "fuel_types",
+        recordId: id,
+        newValues: JSON.stringify({ pricePerLiter }),
+      });
+
+      res.json(fuelType);
+    } catch (error: any) {
+      console.error('Update fuel price error:', error);
+      res.status(500).json({ message: "Error updating fuel price: " + error.message });
     }
   });
 

@@ -12,14 +12,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-✓ **January 11, 2025**: Complete fuel dispensing system deployed
+✓ **January 11, 2025**: Complete fuel dispensing system with enhanced features deployed
 - Implemented full-stack architecture with React frontend and Express backend
-- Integrated PostgreSQL database with Drizzle ORM
+- Integrated PostgreSQL database with Drizzle ORM with expanded schema
 - Added real-time WebSocket communication for payment status updates
-- Built PromptPay QR code payment integration
+- Built PromptPay QR code payment integration for Thai market
+- **NEW**: Implemented Stripe payment gateway for international customers
+- **NEW**: Created comprehensive admin dashboard with real-time monitoring
+- **NEW**: Added audit logging system for security and compliance
+- **NEW**: Implemented maintenance record management
+- **NEW**: Added system configuration management
+- **NEW**: Enhanced user management with roles and permissions
 - Created comprehensive fuel selection interface with touch-friendly design
 - Implemented fuel dispensing simulation with progress tracking
 - Added transaction history and receipt generation
+- Added navigation between customer interface and admin dashboard
 - Fixed all accessibility warnings and error handling
 
 ## System Architecture
@@ -53,10 +60,14 @@ The application follows a modern full-stack architecture with clear separation b
 - Real-time price calculations
 
 ### 2. Payment Processing
-- Dynamic QR code generation for PromptPay integration
-- Real-time payment status monitoring
-- WebSocket-based status updates
+- **Dual Payment Gateway Integration**:
+  - PromptPay QR code generation for Thai customers
+  - Stripe payment processing for international credit/debit cards
+  - Digital wallet support through Stripe
+- Real-time payment status monitoring across both gateways
+- WebSocket-based status updates for immediate feedback
 - Payment timeout handling with retry mechanisms
+- Secure payment intent management with Stripe API
 
 ### 3. Dispensing Control
 - Pump status management (active/inactive, online/offline)
